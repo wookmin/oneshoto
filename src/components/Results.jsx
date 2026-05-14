@@ -379,17 +379,25 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
         return;
       }
 
-      const result = await fetchRecommendations({
-        category,
-        days: Number(formData.days),
-        currency: 'KRW',
-        foodBudgetTotal: budgetCalc.foodTotal,
-        coordinates: locationInfo.coords,
-      });
+      if (category === 'food') {
+        const result = await fetchRecommendations({
+          category,
+          days: Number(formData.days),
+          currency: 'KRW',
+          foodBudgetTotal: budgetCalc.foodTotal,
+          coordinates: locationInfo.coords,
+        });
 
-      setRecommendationsByTab((current) => ({ ...current, [category]: result }));
-      setSelectedIndexByTab((current) => ({ ...current, [category]: 0 }));
-      setShowInsightsByTab((current) => ({ ...current, [category]: false }));
+        setRecommendationsByTab((current) => ({ ...current, [category]: result }));
+        setSelectedIndexByTab((current) => ({ ...current, [category]: 0 }));
+        setShowInsightsByTab((current) => ({ ...current, [category]: false }));
+      } else {
+        const { recommendation: fallbackResult, mapPlaces } = await buildFallbackRecommendations(category);
+        setRecommendationsByTab((current) => ({ ...current, [category]: fallbackResult }));
+        setMapPlacesByTab((current) => ({ ...current, [category]: mapPlaces }));
+        setSelectedIndexByTab((current) => ({ ...current, [category]: 0 }));
+        setShowInsightsByTab((current) => ({ ...current, [category]: false }));
+      }
     } catch (error) {
       try {
         const { recommendation: fallbackResult, mapPlaces } = await buildFallbackRecommendations(category);
@@ -402,15 +410,15 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
           [category]: 'Gemini 호출이 제한되어 Google 지도 기반 추천으로 전환했습니다.',
         }));
       } catch (fallbackError) {
-      setErrorByTab((current) => ({
-        ...current,
-        [category]:
-          fallbackError instanceof Error
-            ? fallbackError.message
-            : error instanceof Error
-              ? error.message
-              : '추천을 불러오지 못했습니다.',
-      }));
+        setErrorByTab((current) => ({
+          ...current,
+          [category]:
+            fallbackError instanceof Error
+              ? fallbackError.message
+              : error instanceof Error
+                ? error.message
+                : '추천을 불러오지 못했습니다.',
+        }));
       }
     } finally {
       setLoadingByTab((current) => ({ ...current, [category]: false }));
