@@ -133,61 +133,32 @@ export async function reverseGeocode(google, location) {
   };
 }
 
-export function searchPlace(service, query, location) {
-  return new Promise((resolve, reject) => {
-    service.textSearch(
-      {
-        query,
-        location,
-        radius: 15000,
-      },
-      (results, status) => {
-        if (status === window.google.maps.places.PlacesServiceStatus.OK && results?.length) {
-          resolve(results[0]);
-          return;
-        }
-
-        if (status === window.google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-          resolve(null);
-          return;
-        }
-
-        reject(new Error('식당 위치를 Google Maps에서 찾지 못했습니다.'));
-      },
-    );
+export async function searchPlace(query, location) {
+  const { Place } = await window.google.maps.importLibrary('places');
+  const { places } = await Place.searchByText({
+    textQuery: query,
+    fields: ['displayName', 'location', 'rating', 'priceLevel', 'regularOpeningHours', 'formattedAddress', 'id', 'utcOffsetMinutes'],
+    locationBias: location,
+    maxResultCount: 1,
   });
+  return places?.[0] ?? null;
 }
 
-export function searchNearbyPlaces(service, { keyword, location, type }) {
-  return new Promise((resolve, reject) => {
-    service.nearbySearch(
-      {
-        location,
-        radius: 3000,
-        keyword,
-        type,
-      },
-      (results, status) => {
-        if (status === window.google.maps.places.PlacesServiceStatus.OK && results?.length) {
-          resolve(results);
-          return;
-        }
-
-        if (status === window.google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-          resolve([]);
-          return;
-        }
-
-        reject(new Error('주변 장소를 Google Maps에서 찾지 못했습니다.'));
-      },
-    );
+export async function searchNearbyPlaces({ keyword, location }) {
+  const { Place } = await window.google.maps.importLibrary('places');
+  const { places } = await Place.searchByText({
+    textQuery: keyword,
+    fields: ['displayName', 'location', 'rating', 'priceLevel', 'regularOpeningHours', 'id', 'utcOffsetMinutes'],
+    locationBias: location,
+    maxResultCount: 10,
   });
+  return places ?? [];
 }
 
 export function buildDirectionsUrl(place) {
-  if (!place?.place_id) {
+  const placeId = place?.id ?? place?.place_id;
+  if (!placeId) {
     return null;
   }
-
-  return `https://www.google.com/maps/dir/?api=1&destination_place_id=${encodeURIComponent(place.place_id)}`;
+  return `https://www.google.com/maps/dir/?api=1&destination_place_id=${encodeURIComponent(placeId)}`;
 }

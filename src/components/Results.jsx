@@ -37,30 +37,23 @@ const STARVATION_BUDGET_THRESHOLD = 1000;
 const MAX_FIT_BOUNDS_ZOOM = 15;
 const FOCUSED_PLACE_ZOOM = 16;
 
+const PRICE_LEVEL_NUMERIC = { FREE: 1, INEXPENSIVE: 1, MODERATE: 2, EXPENSIVE: 3, VERY_EXPENSIVE: 4 };
+
 function getDisplayPriceLevel(rawLevel) {
-  if (typeof rawLevel === 'string' && rawLevel) {
-    return rawLevel;
-  }
+  if (rawLevel === 'FREE' || rawLevel === 'INEXPENSIVE') return 'budget';
+  if (rawLevel === 'MODERATE') return 'mid';
+  if (rawLevel === 'EXPENSIVE' || rawLevel === 'VERY_EXPENSIVE') return 'splurge';
 
   const numericLevel = Number(rawLevel);
-
-  if (!Number.isFinite(numericLevel)) {
-    return 'mid';
-  }
-
-  if (numericLevel >= 3) {
-    return 'splurge';
-  }
-
-  if (numericLevel >= 2) {
-    return 'mid';
-  }
-
+  if (!Number.isFinite(numericLevel)) return 'mid';
+  if (numericLevel >= 3) return 'splurge';
+  if (numericLevel >= 2) return 'mid';
   return 'budget';
 }
 
 function inferFallbackPriceEstimate(place, category) {
-  const numericLevel = Number(place?.price_level);
+  const rawLevel = place?.priceLevel;
+  const numericLevel = PRICE_LEVEL_NUMERIC[rawLevel] ?? Number(rawLevel);
 
   if (!Number.isFinite(numericLevel)) {
     return null;
@@ -316,7 +309,7 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
           content: createMarkerContent(index === activeSelectedIndex),
         });
 
-        marker.addListener('click', () => {
+        marker.addEventListener('gmp-click', () => {
           setSelectedIndexByTab((current) => ({
             ...current,
             [activeTab]: index,
@@ -427,20 +420,18 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
 
   async function buildFallbackRecommendations(category) {
     const config = fallbackCategoryConfig[category];
-    const service = new window.google.maps.places.PlacesService(mapRef.current);
-    const nearbyResults = await searchNearbyPlaces(service, {
+    const nearbyResults = await searchNearbyPlaces({
       keyword: config.keyword,
       location: locationInfo.coords,
-      type: config.type,
     });
 
     const topResults = nearbyResults.slice(0, 3);
     const places = topResults.map((place) => ({
-      name: place.name || '추천 장소',
+      name: place.displayName || '추천 장소',
       type: config.label,
       price_estimate: inferFallbackPriceEstimate(place, category),
       price_currency: 'KRW',
-      price_level: getDisplayPriceLevel(place.price_level),
+      price_level: getDisplayPriceLevel(place.priceLevel),
       rating_hint: place.rating ? String(place.rating) : 'Google Maps 추천',
       why: `${config.label} 카테고리에서 현재 위치 기준 접근성이 좋은 장소예요.`,
       tip: '운영 시간과 방문 가능 여부는 Google Maps에서 한 번 더 확인해 주세요.',
@@ -453,20 +444,26 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
     }));
 
     const mapPlaces = topResults.map((place) => {
-      const lat = place.geometry?.location?.lat?.();
-      const lng = place.geometry?.location?.lng?.();
+      const lat = place.location?.lat?.();
+      const lng = place.location?.lng?.();
 
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
         return null;
       }
 
       const position = { lat, lng };
+      let openNow = null;
+      try {
+        openNow = place.regularOpeningHours?.isOpen() ?? null;
+      } catch {
+        openNow = null;
+      }
 
       return {
         position,
-        address: place.vicinity || place.formatted_address || '',
+        address: place.formattedAddress || '',
         rating: place.rating || null,
-        openNow: place.opening_hours?.open_now ?? null,
+        openNow,
         distanceKm: calculateDistanceKm(locationInfo.coords, position),
         directionsUrl: buildDirectionsUrl(place),
       };
@@ -491,26 +488,32 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
     }
 
     try {
-      const service = new window.google.maps.places.PlacesService(mapRef.current);
       const resolved = await Promise.all(
         places.map(async (place) => {
           try {
-            const result = await searchPlace(service, place.name, locationInfo.coords);
+            const result = await searchPlace(place.name, locationInfo.coords);
 
-            if (!result?.geometry?.location) {
+            if (!result?.location) {
               return null;
             }
 
             const position = {
-              lat: result.geometry.location.lat(),
-              lng: result.geometry.location.lng(),
+              lat: result.location.lat(),
+              lng: result.location.lng(),
             };
+
+            let openNow = null;
+            try {
+              openNow = result.regularOpeningHours?.isOpen() ?? null;
+            } catch {
+              openNow = null;
+            }
 
             return {
               position,
-              address: result.formatted_address || '',
+              address: result.formattedAddress || '',
               rating: result.rating || null,
-              openNow: result.opening_hours?.open_now ?? null,
+              openNow,
               distanceKm: calculateDistanceKm(locationInfo.coords, position),
               directionsUrl: buildDirectionsUrl(result),
             };
