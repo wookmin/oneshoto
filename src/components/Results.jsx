@@ -34,7 +34,6 @@ const fallbackCategoryConfig = {
 };
 
 const STARVATION_BUDGET_THRESHOLD = 1000;
-const CONVENIENCE_STORE_BUDGET_THRESHOLD = 7000;
 const MAX_FIT_BOUNDS_ZOOM = 15;
 const FOCUSED_PLACE_ZOOM = 16;
 
@@ -145,18 +144,6 @@ function createLowBudgetRecommendation(category, budget) {
     };
   }
 
-  if (budget < CONVENIENCE_STORE_BUDGET_THRESHOLD) {
-    return {
-      category,
-      destination: '현재 위치 주변',
-      food_budget_total: budget,
-      currency: 'KRW',
-      reasoning: '예산이 낮아서 일반 식당보다 현재 위치 근처 편의점 식사가 더 현실적인 선택입니다.',
-      places: [],
-      useConvenienceFallback: true,
-    };
-  }
-
   return null;
 }
 
@@ -200,12 +187,7 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
   const [errorByTab, setErrorByTab] = useState({});
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(null);
-  const lowBudgetMode =
-    budgetCalc.foodTotal < STARVATION_BUDGET_THRESHOLD
-      ? 'starve'
-      : budgetCalc.foodTotal < CONVENIENCE_STORE_BUDGET_THRESHOLD
-        ? 'convenience'
-        : 'normal';
+  const lowBudgetMode = budgetCalc.foodTotal < STARVATION_BUDGET_THRESHOLD ? 'starve' : 'normal';
   const availableTabs = lowBudgetMode === 'normal' ? tabs : tabs.filter((tab) => tab.key === 'food');
 
   const activeRecommendation = recommendationsByTab[activeTab];
@@ -385,25 +367,6 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
     try {
       const lowBudgetRecommendation = createLowBudgetRecommendation(category, budgetCalc.foodTotal);
 
-      if (lowBudgetRecommendation?.useConvenienceFallback) {
-        const { recommendation: convenienceFallback, mapPlaces } = await buildFallbackRecommendations(category, true);
-        setRecommendationsByTab((current) => ({
-          ...current,
-          [category]: {
-            ...convenienceFallback,
-            reasoning: lowBudgetRecommendation.reasoning,
-          },
-        }));
-        setMapPlacesByTab((current) => ({ ...current, [category]: mapPlaces }));
-        setSelectedIndexByTab((current) => ({ ...current, [category]: 0 }));
-        setShowInsightsByTab((current) => ({ ...current, [category]: false }));
-        setErrorByTab((current) => ({
-          ...current,
-          [category]: '예산이 낮아 근처 편의점 중심으로 추천했습니다.',
-        }));
-        return;
-      }
-
       if (lowBudgetRecommendation) {
         setRecommendationsByTab((current) => ({ ...current, [category]: lowBudgetRecommendation }));
         setSelectedIndexByTab((current) => ({ ...current, [category]: 0 }));
@@ -454,15 +417,8 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
     }
   }
 
-  async function buildFallbackRecommendations(category, forceConvenienceStore = false) {
-    const config =
-      forceConvenienceStore
-        ? {
-            keyword: 'convenience store CU GS25 7-Eleven emart24 세븐일레븐 편의점',
-            type: 'convenience_store',
-            label: '편의점',
-          }
-        : fallbackCategoryConfig[category];
+  async function buildFallbackRecommendations(category) {
+    const config = fallbackCategoryConfig[category];
     const service = new window.google.maps.places.PlacesService(mapRef.current);
     const nearbyResults = await searchNearbyPlaces(service, {
       keyword: config.keyword,
@@ -478,12 +434,8 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
       price_currency: 'KRW',
       price_level: getDisplayPriceLevel(place.price_level),
       rating_hint: place.rating ? String(place.rating) : 'Google Maps 추천',
-      why: forceConvenienceStore
-        ? '현재 예산에서는 식당보다 빠르고 저렴하게 끼니를 해결하기 쉬운 선택입니다.'
-        : `${config.label} 카테고리에서 현재 위치 기준 접근성이 좋은 장소예요.`,
-      tip: forceConvenienceStore
-        ? '삼각김밥, 김밥, 컵라면 조합처럼 예산 안에서 해결 가능한 메뉴를 먼저 확인해 보세요.'
-        : '운영 시간과 방문 가능 여부는 Google Maps에서 한 번 더 확인해 주세요.',
+      why: `${config.label} 카테고리에서 현재 위치 기준 접근성이 좋은 장소예요.`,
+      tip: '운영 시간과 방문 가능 여부는 Google Maps에서 한 번 더 확인해 주세요.',
       transit: {
         method: '도보',
         duration_minutes: 10,
@@ -518,9 +470,7 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
         destination: '현재 위치 주변',
         food_budget_total: budgetCalc.foodTotal,
         currency: 'KRW',
-        reasoning: forceConvenienceStore
-          ? '예산이 낮아 현재 위치 기준 가까운 편의점 위주로 먼저 보여드리고 있어요.'
-          : 'Gemini 응답이 지연되어 Google Maps 주변 검색 결과를 먼저 보여드리고 있어요.',
+        reasoning: 'Gemini 응답이 지연되어 Google Maps 주변 검색 결과를 먼저 보여드리고 있어요.',
         places,
       },
       mapPlaces,
@@ -698,12 +648,6 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
               <strong>{formatCurrency(formData.totalBudget, 'KRW')}</strong>
             </div>
           </div>
-
-          {lowBudgetMode === 'convenience' && (
-            <div className="sheet-error">
-              <p>예산이 낮아 주변 편의점을 바로 안내합니다.</p>
-            </div>
-          )}
 
           {lowBudgetMode === 'starve' && (
             <div className="sheet-error">
