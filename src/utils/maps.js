@@ -11,7 +11,7 @@ function createMapsScriptUrl(apiKey) {
 }
 
 export function loadGoogleMaps() {
-  if (window.google?.maps?.places) {
+  if (window.google?.maps?.importLibrary) {
     return Promise.resolve(window.google);
   }
 
@@ -134,7 +134,8 @@ export async function reverseGeocode(google, location) {
 }
 
 export async function searchPlace(query, location) {
-  const { Place } = await window.google.maps.importLibrary('places');
+  const google = await loadGoogleMaps();
+  const { Place } = await google.maps.importLibrary('places');
   const { places } = await Place.searchByText({
     textQuery: query,
     fields: ['displayName', 'location', 'rating', 'priceLevel', 'regularOpeningHours', 'formattedAddress', 'id', 'utcOffsetMinutes'],
@@ -145,7 +146,8 @@ export async function searchPlace(query, location) {
 }
 
 export async function searchNearbyPlaces({ keyword, location }) {
-  const { Place } = await window.google.maps.importLibrary('places');
+  const google = await loadGoogleMaps();
+  const { Place } = await google.maps.importLibrary('places');
   const { places } = await Place.searchByText({
     textQuery: keyword,
     fields: ['displayName', 'location', 'rating', 'priceLevel', 'regularOpeningHours', 'id', 'utcOffsetMinutes'],
