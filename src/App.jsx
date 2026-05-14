@@ -3,25 +3,43 @@ import InputForm from './components/InputForm.jsx';
 import Loading from './components/Loading.jsx';
 import Results from './components/Results.jsx';
 import { useBudget } from './hooks/useBudget.js';
-import { fetchRecommendations } from './utils/api.js';
+import { formatCoordinateLabel, getCurrentPosition, loadGoogleMaps, reverseGeocode } from './utils/maps.js';
 
 const initialFormData = {
-  city: '',
   days: 3,
   currency: 'KRW',
   totalBudget: '',
-  shoppingSpend: '',
-  transportSpend: '',
-  style: 'balanced traveler',
 };
 
 function App() {
   const [screen, setScreen] = useState('input');
   const [formData, setFormData] = useState(initialFormData);
-  const [apiResult, setApiResult] = useState(null);
   const [apiError, setApiError] = useState(null);
+  const [locationInfo, setLocationInfo] = useState(null);
 
   const budgetCalc = useBudget(formData);
+  const shouldUseGeocoding = import.meta.env.VITE_GOOGLE_MAPS_ENABLE_GEOCODING === 'true';
+
+  const resolveLocation = async () => {
+    const google = await loadGoogleMaps();
+    const coords = await getCurrentPosition();
+
+    if (shouldUseGeocoding) {
+      try {
+        const resolvedLocation = await reverseGeocode(google, coords);
+        setLocationInfo(resolvedLocation);
+        return;
+      } catch {
+        // Fall through to a generic location label when geocoding is unavailable.
+      }
+    }
+
+    setLocationInfo({
+      label: '현재 위치 주변',
+      detailLabel: formatCoordinateLabel(coords),
+      coords,
+    });
+  };
 
   const handleFieldChange = (event) => {
     const { name, value } = event.target;
@@ -29,40 +47,39 @@ function App() {
       ...current,
       [name]: value,
     }));
+
+    if (apiError) {
+      setApiError(null);
+    }
+  };
+
+  const openResults = async () => {
+    setApiError(null);
+    setScreen('loading');
+
+    try {
+      await resolveLocation();
+      setScreen('results');
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : '위치를 불러오지 못했습니다.');
+      setScreen('input');
+    }
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (!budgetCalc.isValid) {
-      setApiError('식비 예산이 없습니다. 지출을 다시 확인해주세요.');
+      setApiError('식비 예산이 없습니다. 예산을 다시 확인해주세요.');
       return;
     }
 
-    setApiError(null);
-    setScreen('loading');
-
-    try {
-      const result = await fetchRecommendations({
-        city: formData.city.trim(),
-        days: Number(formData.days),
-        currency: formData.currency,
-        dailyFood: budgetCalc.dailyFood,
-        style: formData.style,
-      });
-
-      setApiResult(result);
-      setScreen('results');
-    } catch (error) {
-      setApiError(error instanceof Error ? error.message : '추천을 불러오지 못했습니다.');
-      setApiResult(null);
-      setScreen('results');
-    }
+    await openResults();
   };
 
   const handleReset = () => {
     setApiError(null);
-    setApiResult(null);
+    setLocationInfo(null);
     setScreen('input');
   };
 
@@ -93,9 +110,9 @@ function App() {
             <Results
               formData={formData}
               budgetCalc={budgetCalc}
-              apiResult={apiResult}
-              apiError={apiError}
+              locationInfo={locationInfo}
               onReset={handleReset}
+              onRetryLocation={openResults}
             />
           </div>
         )}

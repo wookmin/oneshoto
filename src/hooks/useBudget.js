@@ -4,17 +4,12 @@ function toNumber(value) {
 }
 
 export function useBudget(formData) {
-  const days = Math.max(toNumber(formData.days), 1);
   const totalBudget = toNumber(formData.totalBudget);
-  const shoppingSpend = toNumber(formData.shoppingSpend);
-  const transportSpend = toNumber(formData.transportSpend);
-  const foodTotal = totalBudget - shoppingSpend - transportSpend;
-  const dailyFood = foodTotal / days;
+  const foodTotal = totalBudget;
   const isValid = foodTotal > 0;
 
   return {
     foodTotal,
-    dailyFood,
     isValid,
   };
 }
