@@ -252,7 +252,7 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
   }, [locationInfo]);
 
   useEffect(() => {
-    if (!locationInfo?.coords) {
+    if (!locationInfo?.coords || !mapReady) {
       return;
     }
 
@@ -262,10 +262,10 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
     if (!current && !existing && !failed) {
       void loadCategory('food');
     }
-  }, [errorByTab.food, locationInfo, loadingByTab.food, recommendationsByTab.food]);
+  }, [errorByTab.food, locationInfo, loadingByTab.food, mapReady, recommendationsByTab.food]);
 
   useEffect(() => {
-    if (!locationInfo?.coords) {
+    if (!locationInfo?.coords || !mapReady) {
       return;
     }
 
@@ -276,7 +276,7 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
     if (!existing && !loading && !failed) {
       void loadCategory(activeTab);
     }
-  }, [activeTab, errorByTab, loadingByTab, locationInfo, recommendationsByTab]);
+  }, [activeTab, errorByTab, loadingByTab, locationInfo, mapReady, recommendationsByTab]);
 
   useEffect(() => {
     if (!mapReady || !locationInfo?.coords || !activeRecommendation || mapPlacesByTab[activeTab]) {
