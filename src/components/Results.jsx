@@ -386,7 +386,7 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
       const lowBudgetRecommendation = createLowBudgetRecommendation(category, budgetCalc.foodTotal);
 
       if (lowBudgetRecommendation?.useConvenienceFallback) {
-        const convenienceFallback = await buildFallbackRecommendations(category, true);
+        const { recommendation: convenienceFallback, mapPlaces } = await buildFallbackRecommendations(category, true);
         setRecommendationsByTab((current) => ({
           ...current,
           [category]: {
@@ -394,6 +394,7 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
             reasoning: lowBudgetRecommendation.reasoning,
           },
         }));
+        setMapPlacesByTab((current) => ({ ...current, [category]: mapPlaces }));
         setSelectedIndexByTab((current) => ({ ...current, [category]: 0 }));
         setShowInsightsByTab((current) => ({ ...current, [category]: false }));
         setErrorByTab((current) => ({
@@ -428,8 +429,9 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
       setShowInsightsByTab((current) => ({ ...current, [category]: false }));
     } catch (error) {
       try {
-        const fallbackResult = await buildFallbackRecommendations(category);
+        const { recommendation: fallbackResult, mapPlaces } = await buildFallbackRecommendations(category);
         setRecommendationsByTab((current) => ({ ...current, [category]: fallbackResult }));
+        setMapPlacesByTab((current) => ({ ...current, [category]: mapPlaces }));
         setSelectedIndexByTab((current) => ({ ...current, [category]: 0 }));
         setShowInsightsByTab((current) => ({ ...current, [category]: false }));
         setErrorByTab((current) => ({
@@ -468,7 +470,8 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
       type: config.type,
     });
 
-    const places = nearbyResults.slice(0, 3).map((place) => ({
+    const topResults = nearbyResults.slice(0, 3);
+    const places = topResults.map((place) => ({
       name: place.name || '추천 장소',
       type: config.label,
       price_estimate: inferFallbackPriceEstimate(place, category),
@@ -489,15 +492,38 @@ function Results({ formData, budgetCalc, locationInfo, onReset, onRetryLocation 
       },
     }));
 
+    const mapPlaces = topResults.map((place) => {
+      const lat = place.geometry?.location?.lat?.();
+      const lng = place.geometry?.location?.lng?.();
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return null;
+      }
+
+      const position = { lat, lng };
+
+      return {
+        position,
+        address: place.vicinity || place.formatted_address || '',
+        rating: place.rating || null,
+        openNow: place.opening_hours?.open_now ?? null,
+        distanceKm: calculateDistanceKm(locationInfo.coords, position),
+        directionsUrl: buildDirectionsUrl(place),
+      };
+    });
+
     return {
-      category,
-      destination: '현재 위치 주변',
-      food_budget_total: budgetCalc.foodTotal,
-      currency: 'KRW',
-      reasoning: forceConvenienceStore
-        ? '예산이 낮아 현재 위치 기준 가까운 편의점 위주로 먼저 보여드리고 있어요.'
-        : 'Gemini 응답이 지연되어 Google Maps 주변 검색 결과를 먼저 보여드리고 있어요.',
-      places,
+      recommendation: {
+        category,
+        destination: '현재 위치 주변',
+        food_budget_total: budgetCalc.foodTotal,
+        currency: 'KRW',
+        reasoning: forceConvenienceStore
+          ? '예산이 낮아 현재 위치 기준 가까운 편의점 위주로 먼저 보여드리고 있어요.'
+          : 'Gemini 응답이 지연되어 Google Maps 주변 검색 결과를 먼저 보여드리고 있어요.',
+        places,
+      },
+      mapPlaces,
     };
   }
 

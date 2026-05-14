@@ -1,6 +1,5 @@
 const DEFAULT_MODEL_NAME = 'gemini-2.5-flash';
 const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
-const MAX_RATE_LIMIT_RETRY_WAIT_MS = 2500;
 
 const categoryConfigs = {
   food: {
@@ -57,12 +56,6 @@ function formatRateLimitMessage(retryAfterHeader) {
   }
 
   return '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.';
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
 }
 
 function getConfiguredModels() {
@@ -230,46 +223,6 @@ export async function fetchRecommendations({ category, days, currency, foodBudge
 
     if (response.status === 429) {
       lastRateLimitHeader = response.headers.get('retry-after');
-
-      if (index === 0) {
-        const retryAfterSeconds = Number(lastRateLimitHeader);
-        const retryDelayMs = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
-          ? Math.min(retryAfterSeconds * 1000, MAX_RATE_LIMIT_RETRY_WAIT_MS)
-          : 1200;
-
-        await sleep(retryDelayMs);
-
-        const retryAttempt = await requestRecommendation({
-          apiKey,
-          model,
-          category,
-          days,
-          currency,
-          foodBudgetTotal,
-          coordinates,
-        });
-
-        if (retryAttempt.response.ok) {
-          const content = retryAttempt.payload?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-          if (typeof content !== 'string') {
-            throw new Error('응답 파싱 오류. 다시 시도해주세요.');
-          }
-
-          return parseRecommendationContent(content, category);
-        }
-
-        if (retryAttempt.response.status !== 429) {
-          throw new Error(
-            retryAttempt.payload?.error?.message ||
-              retryAttempt.payload?.message ||
-              '추천 요청에 실패했습니다. Gemini API 키와 네트워크 상태를 확인해주세요.',
-          );
-        }
-
-        lastRateLimitHeader = retryAttempt.response.headers.get('retry-after');
-      }
-
       continue;
     }
 
