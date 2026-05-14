@@ -47,7 +47,6 @@ function InputForm({ formData, budgetCalc, apiError, onChange, onSubmit }) {
         <div className="budget-preview">
           <strong>{formData.days}일 동안 사용할 총 식비 예산</strong>
           <p>{formatCurrency(budgetCalc.foodTotal, 'KRW')}</p>
-          <span>예산을 일수로 억지로 나누지 않고, 이 총액을 넘지 않는 범위에서 추천합니다. 7,000원 미만이면 편의점 위주로 안내합니다.</span>
         </div>
 
         {hasInlineError && <p className="error-text">식비 예산이 없습니다. 예산을 다시 확인해주세요.</p>}
